@@ -1,88 +1,111 @@
-import { useContext } from 'react';
+import React, { useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import CartContext from '../context/CartContext';
 import AuthContext from '../context/AuthContext';
-import axios from 'axios';
-import { Trash2, ArrowRight } from 'lucide-react';
+import { Trash2, ArrowRight, ShoppingCart } from 'lucide-react';
+import Button from '../components/Button';
 
 const Cart = () => {
-  const { cartItems, removeFromCart, fetchCart } = useContext(CartContext);
+  const { cartItems, removeFromCart } = useContext(CartContext);
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
 
-  const subtotal = cartItems.reduce((acc, item) => acc + item.quantity * item.meal.price, 0);
+  // Handle potential nested population differences (item.meal vs item)
+  const getMealData = (item) => item.meal || item;
+
+  const subtotal = cartItems.reduce((acc, item) => {
+    const meal = getMealData(item);
+    return acc + (item.quantity * (meal.price || 0));
+  }, 0);
 
   if (cartItems.length === 0) {
     return (
-      <div style={{ textAlign: 'center', marginTop: '6rem' }}>
-        <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>🛒</div>
-        <h2 style={{ fontSize: '2rem', fontWeight: '600', marginBottom: '1rem' }}>Your cart is empty</h2>
-        <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>Looks like you haven't added any meals yet.</p>
-        <Link to="/" className="btn btn-primary">Browse Meals</Link>
+      <div className="w-full min-h-[60vh] flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-24 h-24 bg-green-50 text-primary rounded-full flex items-center justify-center mb-6">
+          <ShoppingCart size={48} />
+        </div>
+        <h2 className="text-3xl font-extrabold text-gray-900 mb-4">Your cart is empty</h2>
+        <p className="text-lg text-gray-500 mb-8 max-w-md">Looks like you haven't added any meals yet. Let's fix that!</p>
+        <Link to="/menu">
+          <Button variant="primary" size="lg">Browse Meals</Button>
+        </Link>
       </div>
     );
   }
 
   return (
-    <div>
-      <h1 style={{ fontSize: '2rem', fontWeight: '700', marginBottom: '2rem' }}>Your Cart</h1>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full">
+      <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-8">Your Cart</h1>
       
-      <div className="flex" style={{ gap: '2rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-        <div style={{ flex: '1 1 600px' }}>
-          {cartItems.map((item) => (
-            <div key={item._id} className="card flex items-center justify-between" style={{ padding: '1rem', marginBottom: '1rem', flexDirection: 'row' }}>
-              <div className="flex items-center gap-4">
-                <img 
-                  src={item.meal.image} 
-                  alt={item.meal.name} 
-                  style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '8px' }} 
-                />
-                <div>
-                  <h3 style={{ fontWeight: '600', fontSize: '1.1rem' }}>{item.meal.name}</h3>
-                  <p style={{ color: 'var(--text-muted)' }}>₹{item.meal.price.toFixed(2)} x {item.quantity}</p>
+      <div className="flex flex-col lg:flex-row gap-8 items-start">
+        {/* Cart Items List */}
+        <div className="w-full lg:w-2/3 flex flex-col gap-4">
+          {cartItems.map((item) => {
+            const meal = getMealData(item);
+            return (
+              <div key={item._id} className="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-6 hover:shadow-md transition-shadow">
+                <div className="flex items-center gap-6 w-full sm:w-auto">
+                  <img 
+                    src={meal.image || 'https://via.placeholder.com/150'} 
+                    alt={meal.name} 
+                    className="w-24 h-24 object-cover rounded-xl shadow-sm" 
+                  />
+                  <div className="flex flex-col">
+                    <h3 className="font-bold text-lg text-gray-900 mb-1">{meal.name}</h3>
+                    <p className="text-gray-500 font-medium">
+                      <span className="text-primary">${meal.price?.toFixed(2)}</span> x {item.quantity}
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center justify-between w-full sm:w-auto gap-8">
+                  <span className="font-bold text-xl text-gray-900">
+                    ${((meal.price || 0) * item.quantity).toFixed(2)}
+                  </span>
+                  <button 
+                    onClick={() => removeFromCart(item._id)}
+                    className="p-3 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-colors duration-300"
+                    title="Remove Item"
+                  >
+                    <Trash2 size={20} />
+                  </button>
                 </div>
               </div>
-              <div className="flex items-center gap-6">
-                <span style={{ fontWeight: '700', fontSize: '1.2rem' }}>
-                  ₹{(item.meal.price * item.quantity).toFixed(2)}
-                </span>
-                <button 
-                  onClick={() => removeFromCart(item._id)}
-                  style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', padding: '0.5rem' }}
-                >
-                  <Trash2 size={20} />
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
         
-        <div className="card" style={{ padding: '2rem', flex: '1 1 300px', backgroundColor: 'var(--surface)' }}>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: '600', marginBottom: '1.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '1rem' }}>
+        {/* Order Summary */}
+        <div className="w-full lg:w-1/3 bg-white rounded-3xl p-8 shadow-sm border border-gray-100 sticky top-28">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6 pb-6 border-b border-gray-100">
             Order Summary
           </h2>
           
-          <div className="flex justify-between mb-4">
-            <span style={{ color: 'var(--text-muted)' }}>Subtotal</span>
-            <span style={{ fontWeight: '500' }}>₹{subtotal.toFixed(2)}</span>
-          </div>
-          <div className="flex justify-between mb-4">
-            <span style={{ color: 'var(--text-muted)' }}>Delivery</span>
-            <span style={{ fontWeight: '500' }}>₹40.00</span>
-          </div>
-          
-          <div className="flex justify-between mt-6" style={{ borderTop: '1px solid var(--border)', paddingTop: '1.5rem', fontSize: '1.25rem', fontWeight: '700' }}>
-            <span>Total</span>
-            <span>₹{(subtotal + 40).toFixed(2)}</span>
+          <div className="flex flex-col gap-4 mb-6 text-lg">
+            <div className="flex justify-between text-gray-600">
+              <span>Subtotal</span>
+              <span className="font-semibold text-gray-900">${subtotal.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-gray-600">
+              <span>Delivery</span>
+              <span className="font-semibold text-gray-900">$5.00</span>
+            </div>
           </div>
           
-          <button 
-            className="btn btn-primary mt-8 flex items-center justify-center gap-2" 
-            style={{ width: '100%', padding: '1rem' }}
+          <div className="flex justify-between items-center mt-6 pt-6 border-t border-gray-100 mb-8">
+            <span className="text-xl font-bold text-gray-900">Total</span>
+            <span className="text-3xl font-extrabold text-primary">${(subtotal + 5).toFixed(2)}</span>
+          </div>
+          
+          <Button 
+            variant="primary" 
+            size="lg" 
+            className="w-full flex items-center justify-center gap-2 group"
             onClick={() => navigate('/checkout')}
           >
-            Proceed to Checkout <ArrowRight size={18} />
-          </button>
+            Proceed to Checkout 
+            <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+          </Button>
         </div>
       </div>
     </div>

@@ -6,7 +6,7 @@ const CartContext = createContext();
 
 export const CartProvider = ({ children }) => {
   const [cartItems, setCartItems] = useState([]);
-  const { user } = useContext(AuthContext);
+  const { user, logout } = useContext(AuthContext);
 
   useEffect(() => {
     if (user) {
@@ -23,6 +23,10 @@ export const CartProvider = ({ children }) => {
       setCartItems(data);
     } catch (error) {
       console.error('Error fetching cart', error);
+      if (error.response?.status === 401 && logout) {
+        alert("Your session has expired. Please log in again.");
+        logout();
+      }
     }
   };
 
@@ -35,7 +39,12 @@ export const CartProvider = ({ children }) => {
       fetchCart();
     } catch (error) {
       console.error('Error adding to cart', error);
-      alert('Failed to add to cart');
+      if (error.response?.status === 401 && logout) {
+        alert("Your session has expired. Please log in again.");
+        logout();
+      } else {
+        alert('Failed to add to cart');
+      }
     }
   };
 

@@ -24,6 +24,19 @@ const orderSchema = new mongoose.Schema({
     required: true,
     default: 0.0
   },
+  discountAmount: {
+    type: Number,
+    default: 0.0
+  },
+  walletAmountUsed: {
+    type: Number,
+    default: 0.0
+  },
+  shippingAddress: {
+    street: { type: String, required: true },
+    city: { type: String, required: true },
+    zip: { type: String, required: true },
+  },
   status: {
     type: String,
     required: true,

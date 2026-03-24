@@ -25,6 +25,8 @@ const cartRoutes = require('./routes/cartRoutes');
 const orderRoutes = require('./routes/orderRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
+const subscriptionRoutes = require('./routes/subscriptionRoutes');
+const couponRoutes = require('./routes/couponRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -33,6 +35,8 @@ app.use('/api/cart', cartRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/payment', paymentRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
+app.use('/api/coupons', couponRoutes);
 
 app.get('/api/config/razorpay', (req, res) => {
   res.json({ keyId: process.env.RAZORPAY_KEY_ID });

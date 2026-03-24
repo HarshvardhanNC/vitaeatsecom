@@ -18,6 +18,14 @@ const importData = async () => {
     await User.deleteMany();
     await CartItem.deleteMany();
 
+    // Persist Hardcoded Master Admin
+    await User.create({
+      name: 'VitaEats Master Admin',
+      email: 'admin@vitaeats.com',
+      password: 'adminpassword123',
+      role: 'admin'
+    });
+
     await Meal.insertMany(meals);
 
     console.log('Data Imported!');

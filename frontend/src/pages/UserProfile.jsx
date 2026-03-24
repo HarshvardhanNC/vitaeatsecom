@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import AuthContext from '../context/AuthContext';
 import CartContext from '../context/CartContext';
-import { Package, Truck, CheckCircle, Clock, ChevronDown, ChevronUp, RotateCcw, Activity, Target, Shield, Settings, AlertCircle, Users, Database } from 'lucide-react';
+import { Package, Truck, CheckCircle, Clock, ChevronDown, ChevronUp, RotateCcw, Activity, Target, Shield, Settings, AlertCircle, Users, Database, Gift, CalendarDays } from 'lucide-react';
 
 const UserProfile = () => {
   const [orders, setOrders] = useState([]);
+  const [subscriptions, setSubscriptions] = useState([]);
   const [expandedOrderId, setExpandedOrderId] = useState(null);
   const [isReordering, setIsReordering] = useState(false);
   
@@ -15,6 +16,7 @@ const UserProfile = () => {
   const [healthProfile, setHealthProfile] = useState({ age: '', weight: '', height: '', activityLevel: 'low', goal: 'maintenance' });
   const [isUpdatingHealth, setIsUpdatingHealth] = useState(false);
   const [healthMessage, setHealthMessage] = useState('');
+  const [walletBalance, setWalletBalance] = useState(0);
 
   const { user } = useContext(AuthContext);
   const { fetchCart } = useContext(CartContext);
@@ -24,16 +26,21 @@ const UserProfile = () => {
     const fetchUserData = async () => {
       try {
         const config = { headers: { Authorization: `Bearer ${user.token}` } };
-        // Fetch Orders
         const { data: ordersData } = await axios.get('/api/orders/myorders', config);
         setOrders(ordersData);
         
-        // Fetch Nutrition Dashboard
+        try {
+          const { data: subsData } = await axios.get('/api/subscriptions/mine', config);
+          setSubscriptions(subsData);
+        } catch (subErr) {
+          console.error("No subscriptions found", subErr);
+        }
+        
         const { data: dashData } = await axios.get('/api/users/dashboard/nutrition', config);
         setNutritionData(dashData);
         
-        // Fetch Full User Profile for Biometrics
         const { data: profileData } = await axios.get('/api/users/profile', config);
+        setWalletBalance(profileData.walletBalance || 0);
         if (profileData.healthProfile) {
           setHealthProfile({
             age: profileData.healthProfile.age || '',
@@ -57,7 +64,7 @@ const UserProfile = () => {
       const config = { headers: { Authorization: `Bearer ${user.token}` } };
       const { data } = await axios.post('/api/users/profile/health', healthProfile, config);
       setHealthMessage(data.message);
-      // Refresh nutrition data to get new targets
+      
       const { data: dashData } = await axios.get('/api/users/dashboard/nutrition', config);
       setNutritionData(dashData);
       setTimeout(() => setHealthMessage(''), 3000);
@@ -103,172 +110,105 @@ const UserProfile = () => {
     }
   };
 
+  const handleSubscriptionStatus = async (subId, newStatus) => {
+    try {
+      const config = { headers: { Authorization: `Bearer ${user.token}` } };
+      await axios.put(`/api/subscriptions/${subId}/status`, { status: newStatus }, config);
+      
+      // Instantly refresh the local subscription state from DB
+      const { data: subsData } = await axios.get('/api/subscriptions/mine', config);
+      setSubscriptions(subsData);
+    } catch (error) {
+      alert(error.response?.data?.message || 'Failed to update subscription status');
+    }
+  };
+
   const caloriePercentage = Math.min((nutritionData.totalCalories / nutritionData.targetCalories) * 100, 100);
+  const isOverLimit = caloriePercentage >= 100;
 
   return (
-    <div className="container mt-8 mb-12">
-      <div className="card" style={{ padding: '2rem', marginBottom: '2.5rem', display: 'flex', alignItems: 'center', gap: '1.5rem', background: 'linear-gradient(135deg, var(--surface) 0%, #f0fdf4 100%)' }}>
-        <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', fontWeight: '700' }}>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full">
+      {/* Header Profile Section */}
+      <div className="bg-gradient-to-br from-green-50 to-white border border-green-100 p-8 rounded-3xl shadow-sm flex items-center gap-6 mb-12">
+        <div className="w-20 h-20 rounded-full bg-primary text-white flex items-center justify-center text-3xl font-bold shadow-lg">
           {user.name.charAt(0).toUpperCase()}
         </div>
         <div>
-          <h1 style={{ fontSize: '2rem', fontWeight: '700', color: 'var(--text-main)' }}>{user.name}</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}>{user.email}</p>
+          <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">{user.name}</h1>
+          <p className="text-gray-500 text-lg">{user.email}</p>
         </div>
       </div>
 
-      {user && user.role === 'admin' && (
-        <div className="admin-features mb-12">
-          <h2 style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Shield size={24} color="var(--primary)" /> Admin Control Center
-          </h2>
-          
-          <div className="grid-meals" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', marginBottom: '2.5rem' }}>
-            <div className="card" style={{ padding: '1.5rem', cursor: 'pointer', transition: 'transform 0.2s', borderLeft: '4px solid var(--primary)' }} onClick={() => navigate('/admin/dashboard')}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
-                <Activity size={24} color="var(--primary)" />
-                <h3 style={{ fontSize: '1.2rem', fontWeight: '600' }}>Platform Analytics</h3>
-              </div>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>View total revenue, users, and overall platform statistics.</p>
-            </div>
-            
-            <div className="card" style={{ padding: '1.5rem', cursor: 'pointer', transition: 'transform 0.2s', borderLeft: '4px solid #3b82f6' }} onClick={() => navigate('/admin/orders')}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
-                <Package size={24} color="#3b82f6" />
-                <h3 style={{ fontSize: '1.2rem', fontWeight: '600' }}>Master Orders</h3>
-              </div>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Manage and update statuses for all incoming customer orders.</p>
-            </div>
-
-            <div className="card" style={{ padding: '1.5rem', cursor: 'pointer', transition: 'transform 0.2s', borderLeft: '4px solid #8b5cf6' }} onClick={() => navigate('/admin/inventory')}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
-                <Database size={24} color="#8b5cf6" />
-                <h3 style={{ fontSize: '1.2rem', fontWeight: '600' }}>Inventory Stock</h3>
-              </div>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Add, remove, or update meal offerings and their prices.</p>
-            </div>
-          </div>
-
-          <div className="grid-meals" style={{ gridTemplateColumns: '2fr 1fr', gap: '2rem' }}>
-            <div className="card" style={{ padding: '2rem' }}>
-              <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <AlertCircle size={20} color="var(--text-main)" /> System Activity Logs
-              </h3>
-              <div className="flex flex-col gap-4">
-                <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '1rem', borderBottom: '1px solid var(--border)' }}>
-                  <div>
-                    <p style={{ fontWeight: '500' }}>New User Registration Complete</p>
-                    <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>User: john.doe@example.com</p>
-                  </div>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>2 mins ago</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '1rem', borderBottom: '1px solid var(--border)' }}>
-                  <div>
-                    <p style={{ fontWeight: '500' }}>High Value Order Placed</p>
-                    <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Order ID: #A1B2C3D4</p>
-                  </div>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>15 mins ago</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '1rem', borderBottom: '1px solid var(--border)' }}>
-                  <div>
-                    <p style={{ fontWeight: '500' }}>Failed Login Attempt</p>
-                    <p style={{ fontSize: '0.85rem', color: '#ef4444' }}>IP: 192.168.1.1 (Admin Portal)</p>
-                  </div>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>1 hour ago</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="card" style={{ padding: '2rem', background: 'var(--surface)' }}>
-               <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                 <Settings size={20} color="var(--text-main)" /> Quick Settings
-               </h3>
-               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                 <button className="btn btn-outline" style={{ width: '100%', justifyContent: 'flex-start', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                    <Users size={16} /> Manage Admin Users
-                 </button>
-                 <button className="btn btn-outline" style={{ width: '100%', justifyContent: 'flex-start', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                    <Database size={16} /> Backup Database
-                 </button>
-                 <button className="btn btn-outline" style={{ width: '100%', justifyContent: 'flex-start', display: 'flex', gap: '0.5rem', alignItems: 'center', borderColor: '#ef4444', color: '#ef4444' }}>
-                    <AlertCircle size={16} /> Maintenance Mode
-                 </button>
-               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {user && user.role === 'user' && (
-      <div className="grid-meals mb-12" style={{ gridTemplateColumns: 'minmax(300px, 1fr) minmax(350px, 1.5fr)', gap: '2rem' }}>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
         {/* Daily Nutrition Tracker */}
-        <div className="card" style={{ padding: '2rem', background: 'var(--surface)' }}>
-           <h2 style={{ fontSize: '1.4rem', fontWeight: '700', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-main)' }}>
-            <Activity size={24} color="var(--primary)" /> Today's Nutrition Dashboard
+        <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between">
+           <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+            <Activity className="text-primary" /> Today's Nutrition Dashboard
            </h2>
            
-           <div style={{ marginBottom: '2rem' }}>
+           <div className="mb-8">
              <div className="flex justify-between items-end mb-2">
-               <span style={{ fontWeight: '600', color: 'var(--text-muted)' }}>Calories Consumed</span>
-               <span style={{ fontSize: '1.5rem', fontWeight: '700', color: caloriePercentage >= 100 ? '#ef4444' : 'var(--text-main)' }}>
-                 {Math.round(nutritionData.totalCalories)} <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>/ {nutritionData.targetCalories} kcal</span>
+               <span className="font-semibold text-gray-500">Calories Consumed</span>
+               <span className={`text-2xl font-bold ${isOverLimit ? 'text-red-500' : 'text-gray-900'}`}>
+                 {Math.round(nutritionData.totalCalories)} <span className="text-sm text-gray-400">/ {nutritionData.targetCalories} kcal</span>
                </span>
              </div>
-             <div style={{ width: '100%', height: '12px', backgroundColor: 'var(--border)', borderRadius: '10px', overflow: 'hidden' }}>
-               <div style={{ height: '100%', width: `${caloriePercentage}%`, backgroundColor: caloriePercentage >= 100 ? '#ef4444' : 'var(--primary)', transition: 'width 0.5s ease' }}></div>
+             <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
+               <div className={`h-full transition-all duration-500 ${isOverLimit ? 'bg-red-500' : 'bg-primary'}`} style={{ width: `${caloriePercentage}%` }}></div>
              </div>
-             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.5rem', textAlign: 'right' }}>
-               {caloriePercentage >= 100 ? "Limit Reached" : `${Math.round(nutritionData.targetCalories - nutritionData.totalCalories)} kcal remaining`}
+             <p className="text-sm text-gray-400 mt-2 text-right font-medium">
+               {isOverLimit ? "Daily Limit Reached" : `${Math.round(nutritionData.targetCalories - nutritionData.totalCalories)} kcal remaining`}
              </p>
            </div>
 
            <div>
              <div className="flex justify-between items-end mb-2">
-               <span style={{ fontWeight: '600', color: 'var(--text-muted)' }}>Protein Consumed</span>
-               <span style={{ fontSize: '1.3rem', fontWeight: '700', color: 'var(--text-main)' }}>
+               <span className="font-semibold text-gray-500">Protein Consumed</span>
+               <span className="text-xl font-bold text-gray-900">
                  {Math.round(nutritionData.totalProtein)}g
                </span>
              </div>
-             <div style={{ width: '100%', height: '12px', backgroundColor: 'var(--border)', borderRadius: '10px', overflow: 'hidden' }}>
-               <div style={{ height: '100%', width: `${Math.min((nutritionData.totalProtein / 150) * 100, 100)}%`, backgroundColor: '#3b82f6', transition: 'width 0.5s ease' }}></div>
+             <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
+               <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${Math.min((nutritionData.totalProtein / 150) * 100, 100)}%` }}></div>
              </div>
-             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>*Based on real-time order tracking</p>
+             <p className="text-xs text-gray-400 mt-2">*Accumulated from active deliveries natively</p>
            </div>
         </div>
 
         {/* Biometric Health Form */}
-        <div className="card" style={{ padding: '2rem', borderTop: '4px solid var(--primary)' }}>
-           <h2 style={{ fontSize: '1.4rem', fontWeight: '700', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-main)' }}>
-            <Target size={24} color="var(--primary)" /> Biometric Profile Math
+        <div className="bg-white p-8 rounded-3xl border-t-4 border-t-primary shadow-sm">
+           <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+            <Target className="text-primary" /> Target Biometrics
            </h2>
-           <form onSubmit={handleHealthUpdate} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
-                  <div className="form-group mb-0">
-                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Age</label>
-                    <input type="number" className="input" value={healthProfile.age} onChange={e => setHealthProfile({...healthProfile, age: e.target.value})} placeholder="yrs" required />
+           <form onSubmit={handleHealthUpdate} className="flex flex-col gap-5">
+              <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Age</label>
+                    <input type="number" className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:bg-white outline-none transition-all" value={healthProfile.age} onChange={e => setHealthProfile({...healthProfile, age: e.target.value})} placeholder="yrs" required />
                   </div>
-                  <div className="form-group mb-0">
-                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Weight (kg)</label>
-                    <input type="number" className="input" value={healthProfile.weight} onChange={e => setHealthProfile({...healthProfile, weight: e.target.value})} placeholder="kg" required />
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Weight</label>
+                    <input type="number" className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:bg-white outline-none transition-all" value={healthProfile.weight} onChange={e => setHealthProfile({...healthProfile, weight: e.target.value})} placeholder="kg" required />
                   </div>
-                  <div className="form-group mb-0">
-                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Height (cm)</label>
-                    <input type="number" className="input" value={healthProfile.height} onChange={e => setHealthProfile({...healthProfile, height: e.target.value})} placeholder="cm" required />
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Height</label>
+                    <input type="number" className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:bg-white outline-none transition-all" value={healthProfile.height} onChange={e => setHealthProfile({...healthProfile, height: e.target.value})} placeholder="cm" required />
                   </div>
               </div>
               
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                  <div className="form-group mb-0">
-                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Activity Level</label>
-                    <select className="input" value={healthProfile.activityLevel} onChange={e => setHealthProfile({...healthProfile, activityLevel: e.target.value})}>
+              <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Activity</label>
+                    <select className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:bg-white outline-none transition-all font-medium text-gray-700" value={healthProfile.activityLevel} onChange={e => setHealthProfile({...healthProfile, activityLevel: e.target.value})}>
                       <option value="low">Low (Sedentary)</option>
                       <option value="moderate">Moderate (Active)</option>
                       <option value="high">High (Athlete)</option>
                     </select>
                   </div>
-                  <div className="form-group mb-0">
-                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Body Goal</label>
-                    <select className="input" value={healthProfile.goal} onChange={e => setHealthProfile({...healthProfile, goal: e.target.value})}>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Goal</label>
+                    <select className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:bg-white outline-none transition-all font-medium text-gray-700" value={healthProfile.goal} onChange={e => setHealthProfile({...healthProfile, goal: e.target.value})}>
                       <option value="weight-loss">Weight Loss</option>
                       <option value="maintenance">Maintenance</option>
                       <option value="muscle-gain">Muscle Gain</option>
@@ -276,52 +216,135 @@ const UserProfile = () => {
                   </div>
               </div>
 
-              <button type="submit" className="btn btn-primary mt-2" disabled={isUpdatingHealth}>
-                {isUpdatingHealth ? 'Calculating BMR...' : 'Calculate & Save Biometrics'}
+              <button type="submit" className="w-full py-3 mt-2 bg-primary text-white font-bold rounded-xl hover:bg-green-700 transition-colors" disabled={isUpdatingHealth}>
+                {isUpdatingHealth ? 'Calculating BMR...' : 'Calibrate Mathematics'}
               </button>
-              {healthMessage && <p style={{ color: 'var(--primary)', fontSize: '0.9rem', textAlign: 'center', marginTop: '0.5rem', fontWeight: '500' }}>{healthMessage}</p>}
+              {healthMessage && <p className="text-center text-sm text-primary font-bold mt-2">{healthMessage}</p>}
            </form>
         </div>
       </div>
       )}
 
+      {/* Subscription Block */}
+      {user && user.role === 'user' && (
+        <div className="mb-12">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+            <CalendarDays className="text-primary" /> Manage Subscriptions
+          </h2>
+          {subscriptions.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {subscriptions.map((sub) => (
+                <div key={sub._id} className="bg-white border-2 border-primary rounded-3xl p-6 shadow-sm relative overflow-hidden">
+                  <div className="absolute -right-6 -top-6 w-24 h-24 bg-green-50 rounded-full opacity-50"></div>
+                  <div className="mb-6 relative z-10">
+                    <span className="inline-block px-3 py-1 bg-green-100 text-primary uppercase tracking-wider font-extrabold text-xs rounded-lg mb-3">
+                      {sub.status}
+                    </span>
+                    <h3 className="text-xl font-extrabold text-gray-900">{sub.planType} Plan</h3>
+                    <p className="text-gray-500 mt-1 font-medium">{sub.mealsPerWeek} Signature Meals / Week</p>
+                    <p className="text-sm font-semibold text-gray-400 mt-2">Arrives: {new Date(sub.nextDelivery).toLocaleDateString()}</p>
+                  </div>
+                  <div className="flex gap-3 relative z-10">
+                    {sub.status === 'Active' && (
+                      <button className="flex-1 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition-colors text-sm" onClick={() => handleSubscriptionStatus(sub._id, 'Paused')}>Pause Plan</button>
+                    )}
+                    {sub.status === 'Paused' && (
+                      <button className="flex-1 py-2 bg-green-100 hover:bg-green-200 text-green-800 font-bold rounded-xl transition-colors text-sm shadow-sm" onClick={() => handleSubscriptionStatus(sub._id, 'Active')}>Resume Deliveries</button>
+                    )}
+                    {sub.status !== 'Cancelled' && (
+                      <button className="flex-1 py-2 bg-red-50 hover:bg-red-100 text-red-600 font-bold rounded-xl border border-red-100 transition-colors text-sm" onClick={() => { if(window.confirm('Terminate this subscription permanently?')) handleSubscriptionStatus(sub._id, 'Cancelled') }}>Cancel Plan</button>
+                    )}
+                    {sub.status === 'Cancelled' && (
+                      <span className="flex-1 py-2 text-center text-gray-400 font-bold text-sm bg-gray-50 rounded-xl border border-gray-100">Plan Terminated</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-white border-2 border-dashed border-gray-200 rounded-3xl p-10 text-center flex flex-col items-center justify-center">
+              <CalendarDays size={48} className="text-gray-300 mb-4" />
+              <p className="text-lg text-gray-600 font-medium mb-6">You have no active Subscriptions protecting your dietary goals.</p>
+              <button className="px-8 py-3 bg-primary text-white font-bold rounded-xl hover:bg-green-700 transition-colors" onClick={() => navigate('/subscription')}>
+                Explore Meal Plans
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Rewards System */}
+      {user && user.role === 'user' && (
+        <div className="mb-12">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+            <Gift className="text-primary" /> Refer & Earn Rewards
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Give 20%, Get ₹150</h3>
+              <p className="text-gray-500 mb-6">Share your unique code with friends. They get 20% off their first order, and you get ₹150 added to your wallet automatically!</p>
+              
+              <div className="flex bg-gray-50 rounded-xl border border-gray-200 p-2 items-center">
+                <span className="flex-grow pl-4 font-mono font-bold text-lg text-primary tracking-widest text-center md:text-left">
+                  VITA-{user._id.substring(user._id.length - 6).toUpperCase()}
+                </span>
+                <button className="px-6 py-2 bg-gray-900 hover:bg-black text-white font-bold rounded-lg transition-colors" onClick={() => { navigator.clipboard.writeText(`VITA-${user._id.substring(user._id.length - 6).toUpperCase()}`); alert("Copied to clipboard!"); }}>
+                  Copy
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-gradient-to-br from-gray-900 to-black p-8 rounded-3xl shadow-xl border border-gray-800 flex flex-col items-center justify-center text-center text-white relative overflow-hidden">
+               <div className="absolute top-0 right-0 w-40 h-40 bg-gray-800 rounded-full blur-3xl opacity-50"></div>
+               <div className="text-5xl font-extrabold mb-2 relative z-10 text-primary drop-shadow-lg">₹{walletBalance}<span className="text-xl text-gray-400">.00</span></div>
+               <h3 className="font-bold text-lg relative z-10">Available Wallet Balance</h3>
+               <p className="text-gray-400 text-sm mt-2 relative z-10">Wallet credits instantly apply during checkout.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Live Orders Tracker */}
       {activeOrders.length > 0 && (
         <div className="mb-12">
-          <h2 style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span className="pulse-dot"></span> Live Active Deliveries
+          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+            <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse border-2 border-red-200"></span> Live Active Deliveries
           </h2>
-          <div className="flex flex-col gap-8">
+          <div className="flex flex-col gap-6">
             {activeOrders.map(order => {
               const step = getStepProgress(order.status);
               return (
-                <div key={order._id} className="card tracking-card" style={{ padding: '2.5rem' }}>
-                  <div className="flex justify-between items-center mb-8">
+                <div key={order._id} className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
+                  <div className="flex justify-between items-start mb-8 border-b border-gray-50 pb-6">
                     <div>
-                      <h3 style={{ fontWeight: '600', fontSize: '1.2rem' }}>Order #{order._id.substring(order._id.length - 6).toUpperCase()}</h3>
-                      <p style={{ color: 'var(--text-muted)', marginTop: '0.25rem' }}>Estimated Delivery Time: 30-45 mins</p>
+                      <h3 className="text-xl font-bold text-gray-900 tracking-tight">Order #{order._id.substring(order._id.length - 6).toUpperCase()}</h3>
+                      <p className="text-primary font-medium mt-1">Status: {order.status}</p>
                     </div>
-                    <div style={{ fontWeight: '700', fontSize: '1.8rem', color: 'var(--primary)' }}>₹{order.totalAmount.toFixed(2)}</div>
+                    <div className="text-2xl font-extrabold text-gray-900">₹{order.totalAmount.toFixed(2)}</div>
                   </div>
 
-                  <div className="tracking-progress">
-                    <div className="progress-bg"></div>
-                    <div className="progress-bar" style={{ width: `${(step - 1) * 33.33}%` }}></div>
+                  {/* Progress Pipeline */}
+                  <div className="relative pt-4">
+                    <div className="absolute top-1/2 left-0 w-full h-1.5 bg-gray-100 rounded-full -translate-y-1/2"></div>
+                    <div className="absolute top-1/2 left-0 h-1.5 bg-primary rounded-full -translate-y-1/2 transition-all duration-700" style={{ width: `${(step - 1) * 33.33}%` }}></div>
                     
-                    <div className={`step ${step >= 1 ? 'active' : ''}`}>
-                      <div className="step-icon"><Clock size={20} /></div>
-                      <span className="step-text">Verifying</span>
-                    </div>
-                    <div className={`step ${step >= 2 ? 'active' : ''}`}>
-                      <div className="step-icon"><Package size={20} /></div>
-                      <span className="step-text">Confirmed</span>
-                    </div>
-                    <div className={`step ${step >= 3 ? 'active' : ''} ${step === 3 ? 'pulse-icon' : ''}`}>
-                      <div className="step-icon"><Truck size={20} /></div>
-                      <span className="step-text">On the Way</span>
-                    </div>
-                    <div className={`step ${step >= 4 ? 'active' : ''}`}>
-                      <div className="step-icon"><CheckCircle size={20} /></div>
-                      <span className="step-text">Delivered</span>
+                    <div className="relative flex justify-between z-10">
+                      <div className="flex flex-col items-center gap-2">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg transition-colors ${step >= 1 ? 'bg-primary text-white shadow-md' : 'bg-gray-200 text-gray-400'}`}><Clock size={18} /></div>
+                        <span className={`text-xs font-bold ${step >= 1 ? 'text-gray-900' : 'text-gray-400'}`}>Verifying</span>
+                      </div>
+                      <div className="flex flex-col items-center gap-2">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg transition-colors ${step >= 2 ? 'bg-primary text-white shadow-md' : 'bg-gray-200 text-gray-400'}`}><CheckCircle size={18} /></div>
+                        <span className={`text-xs font-bold ${step >= 2 ? 'text-gray-900' : 'text-gray-400'}`}>Confirmed</span>
+                      </div>
+                      <div className="flex flex-col items-center gap-2">
+                         <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg transition-colors ${step >= 3 ? 'bg-primary text-white shadow-md' : 'bg-gray-200 text-gray-400'} ${step === 3 ? 'ring-4 ring-green-100 animate-pulse' : ''}`}><Truck size={18} /></div>
+                        <span className={`text-xs font-bold ${step >= 3 ? 'text-gray-900' : 'text-gray-400'}`}>Dispatch</span>
+                      </div>
+                      <div className="flex flex-col items-center gap-2">
+                         <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg transition-colors ${step >= 4 ? 'bg-primary text-white shadow-md' : 'bg-gray-200 text-gray-400'}`}><Package size={18} /></div>
+                        <span className={`text-xs font-bold ${step >= 4 ? 'text-gray-900' : 'text-gray-400'}`}>Delivered</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -331,78 +354,82 @@ const UserProfile = () => {
         </div>
       )}
 
+      {/* Order History */}
       {pastOrders.length > 0 && (
         <div>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '1.5rem', color: 'var(--text-muted)' }}>Order History Log</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-6 border-b border-gray-200 pb-4">Order History Log</h2>
           <div className="flex flex-col gap-4">
             {pastOrders.map(order => (
-              <div key={order._id} className="card" style={{ overflow: 'hidden', opacity: 0.95 }}>
+              <div key={order._id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-colors hover:border-gray-300">
                 <div 
-                  className="flex justify-between items-center" 
-                  style={{ padding: '1.5rem', cursor: 'pointer', backgroundColor: expandedOrderId === order._id ? 'var(--background)' : 'transparent', transition: 'background 0.2s' }}
+                  className="p-6 cursor-pointer flex justify-between items-center bg-transparent hover:bg-gray-50 transition-colors"
                   onClick={() => toggleExpand(order._id)}
                 >
-                  <div className="flex items-center gap-4">
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <div className="flex items-center gap-6">
+                    <div className="flex -space-x-3 isolate">
                        {order.orderItems.slice(0, 3).map((item, idx) => (
-                         <img key={idx} src={item.image} alt={item.name} title={item.name} style={{ width: '50px', height: '50px', borderRadius: '50%', border: '2px solid white', marginLeft: idx > 0 ? '-1rem' : '0', boxShadow: 'var(--shadow-sm)', objectFit: 'cover' }} />
+                         <img key={idx} src={item.image} alt={item.name} className="w-12 h-12 rounded-full border-2 border-white object-cover shadow-sm bg-gray-100" />
                        ))}
-                       {order.orderItems.length > 3 && <span style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'var(--border)', color: 'var(--text-main)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem', fontWeight: '600', marginLeft: '-1rem', border: '2px solid white', zIndex: 10 }}>+{order.orderItems.length - 3}</span>}
+                       {order.orderItems.length > 3 && (
+                         <div className="w-12 h-12 rounded-full border-2 border-white bg-gray-100 text-gray-600 font-bold flex items-center justify-center text-sm shadow-sm z-10">
+                           +{order.orderItems.length - 3}
+                         </div>
+                       )}
                     </div>
                     <div>
-                      <h4 style={{ fontWeight: '600', fontSize: '1.1rem', color: 'var(--text-main)', marginBottom: '0.25rem' }}>#{order._id.substring(order._id.length - 6).toUpperCase()}</h4>
-                      <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                        <CheckCircle size={14} color="var(--primary)" /> Delivered on {new Date(order.createdAt).toLocaleDateString()}
+                      <h4 className="font-bold text-gray-900 text-lg">#{order._id.substring(order._id.length - 6).toUpperCase()}</h4>
+                      <p className="text-sm text-gray-500 flex items-center gap-1.5 mt-1 font-medium">
+                        <CheckCircle size={14} className="text-primary" /> Delivered {new Date(order.createdAt).toLocaleDateString()}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-6">
-                    <div style={{ fontWeight: '700', fontSize: '1.3rem', color: 'var(--text-main)' }}>₹{order.totalAmount.toFixed(2)}</div>
-                    <div style={{ color: 'var(--primary)' }}>
+                    <div className="font-extrabold text-xl text-gray-900">₹{order.totalAmount.toFixed(2)}</div>
+                    <div className="text-gray-400">
                       {expandedOrderId === order._id ? <ChevronUp size={24} /> : <ChevronDown size={24} />}
                     </div>
                   </div>
                 </div>
 
+                {/* Expanded Receipt */}
                 {expandedOrderId === order._id && (
-                  <div style={{ padding: '2rem 1.5rem', borderTop: '1px solid var(--border)', backgroundColor: 'var(--surface)' }}>
-                    <h4 style={{ fontSize: '1.1rem', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '1rem' }}>Detailed Receipt Overview</h4>
+                  <div className="p-6 bg-gray-50 border-t border-gray-100">
+                    <h4 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4">Detailed Receipt</h4>
                     
-                    <div className="flex flex-col gap-4 mb-6">
+                    <div className="space-y-3 mb-6 bg-white p-4 rounded-xl border border-gray-100">
                       {order.orderItems.map((item, idx) => (
-                        <div key={idx} className="flex justify-between items-center" style={{ paddingBottom: '0.8rem', borderBottom: '1px dashed var(--border)' }}>
-                          <div className="flex items-center gap-3">
-                            <span style={{ fontWeight: '600', color: 'var(--primary)', width: '25px' }}>{item.quantity}x</span>
-                            <span style={{ fontWeight: '500' }}>{item.name}</span>
+                        <div key={idx} className="flex justify-between items-center text-sm font-medium">
+                          <div className="flex items-center gap-3 text-gray-800">
+                            <span className="text-primary font-bold">{item.quantity}x</span>
+                            <span>{item.name}</span>
                           </div>
-                          <div style={{ color: 'var(--text-muted)' }}>₹{(item.price * item.quantity).toFixed(2)}</div>
+                          <div className="text-gray-500">₹{(item.price * item.quantity).toFixed(2)}</div>
                         </div>
                       ))}
                     </div>
                     
-                    <div className="flex flex-col gap-2" style={{ marginLeft: 'auto', width: '250px', paddingBottom: '1.5rem' }}>
-                      <div className="flex justify-between" style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
-                        <span>Subtotal Math</span>
+                    <div className="w-64 ml-auto space-y-2 text-sm">
+                      <div className="flex justify-between text-gray-500 font-medium">
+                        <span>Items Subtotal</span>
                         <span>₹{(order.totalAmount - 40).toFixed(2)}</span>
                       </div>
-                      <div className="flex justify-between" style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
-                        <span>Fixed Delivery Fee</span>
+                      <div className="flex justify-between text-gray-500 font-medium pb-2 border-b border-gray-200">
+                        <span>Delivery Vector</span>
                         <span>₹40.00</span>
                       </div>
-                      <div className="flex justify-between" style={{ fontWeight: '700', fontSize: '1.2rem', marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '2px solid var(--border)' }}>
-                        <span>Final Total Paid</span>
+                      <div className="flex justify-between font-extrabold text-lg text-gray-900 pt-1">
+                        <span>Final Paid</span>
                         <span>₹{order.totalAmount.toFixed(2)}</span>
                       </div>
                     </div>
 
-                    <div className="flex justify-end mt-4">
+                    <div className="flex justify-end mt-8">
                       <button 
-                        className="btn btn-primary" 
-                        style={{ padding: '0.8rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                        className="flex items-center gap-2 px-6 py-2.5 bg-gray-900 hover:bg-black text-white font-bold text-sm rounded-xl transition-colors shadow-md disabled:bg-gray-400"
                         onClick={() => handleReorder(order)}
                         disabled={isReordering}
                       >
-                        {isReordering ? 'Executing Rebuild Action...' : <><RotateCcw size={18} /> Reorder Entire Meal</>}
+                        {isReordering ? 'Rebuilding Matrix...' : <><RotateCcw size={16} /> Reorder Identical Sequence</>}
                       </button>
                     </div>
                   </div>
@@ -412,6 +439,7 @@ const UserProfile = () => {
           </div>
         </div>
       )}
+
     </div>
   );
 };

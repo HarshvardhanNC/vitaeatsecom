@@ -102,4 +102,33 @@ const deleteMeal = async (req, res) => {
   }
 };
 
-module.exports = { getMeals, createMeal, updateMeal, deleteMeal };
+// @desc    Create custom user bowl dynamically
+// @route   POST /api/meals/custom
+// @access  Private
+const createCustomMeal = async (req, res) => {
+  try {
+    const { price, calories, protein, carbs, fats, ingredients } = req.body;
+    
+    const meal = new Meal({
+      name: 'Custom Signature Bowl',
+      price: price || 0,
+      calories: calories || 0,
+      image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=400',
+      stock: 999,
+      protein: protein || 0,
+      carbs: carbs || 0,
+      fats: fats || 0,
+      dietTags: ['Custom'],
+      ingredients: ingredients || [],
+      isCustom: true,
+      category: 'Custom'
+    });
+    
+    const createdMeal = await meal.save();
+    res.status(201).json(createdMeal);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+module.exports = { getMeals, createMeal, updateMeal, deleteMeal, createCustomMeal };

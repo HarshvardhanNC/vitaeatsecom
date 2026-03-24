@@ -40,6 +40,11 @@ const mealSchema = new mongoose.Schema({
   ingredients: [{
     type: String
   }],
+  category: {
+    type: String,
+    required: true,
+    default: 'All'
+  },
   oilType: {
     type: String,
     default: 'None'
@@ -48,6 +53,10 @@ const mealSchema = new mongoose.Schema({
     type: String,
     enum: ['zero', 'low', 'medium', 'high'],
     default: 'medium'
+  },
+  isCustom: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true

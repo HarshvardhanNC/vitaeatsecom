@@ -23,7 +23,12 @@ export const AuthProvider = ({ children }) => {
       const { data } = await axios.post(`${API_BASE}/api/auth/login`, { email, password });
       setUser(data);
       localStorage.setItem('userInfo', JSON.stringify(data));
-      navigate('/home');
+      
+      if (data.role === 'admin') {
+        navigate('/admin/dashboard');
+      } else {
+        navigate('/home');
+      }
     } catch (error) {
       throw new Error(error.response?.data?.message || 'Login failed');
     }

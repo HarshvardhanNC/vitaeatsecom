@@ -81,6 +81,13 @@ const Invoice = () => {
           </div>
         </div>
 
+        {order.shippingAddress && (
+          <div className="mb-8 p-4 bg-gray-50 rounded-xl border border-gray-100 no-print">
+            <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-main)', marginBottom: '0.25rem' }}>Delivery Address:</h3>
+            <p style={{ color: 'var(--text-muted)' }}>{order.shippingAddress.street}, {order.shippingAddress.city} {order.shippingAddress.zip}</p>
+          </div>
+        )}
+
         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '2rem' }}>
           <thead>
             <tr style={{ background: 'var(--surface)', borderBottom: '2px solid var(--border)' }}>
@@ -112,6 +119,12 @@ const Invoice = () => {
               <span style={{ color: 'var(--text-muted)' }}>Delivery Charge</span>
               <span>₹40.00</span>
             </div>
+            {order.discountAmount > 0 && (
+              <div className="flex justify-between mb-4 text-green-600 font-semibold">
+                <span>Discount Applied</span>
+                <span>-₹{order.discountAmount.toFixed(2)}</span>
+              </div>
+            )}
             <div className="flex justify-between" style={{ padding: '1rem 0', borderTop: '2px solid var(--text-main)', fontSize: '1.3rem', fontWeight: '700' }}>
               <span>Total Amount</span>
               <span style={{ color: 'var(--primary)' }}>₹{order.totalAmount.toFixed(2)}</span>

@@ -1,26 +1,23 @@
-const Razorpay = require('razorpay');
-const crypto = require('crypto');
 const Order = require('../models/Order');
 const CartItem = require('../models/CartItem');
 const Meal = require('../models/Meal');
-
-// Initialize Razorpay
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID || 'dummy_key',
-  key_secret: process.env.RAZORPAY_KEY_SECRET || 'dummy_secret',
-});
 
 // @desc    Create Razorpay Order
 // @route   POST /api/payment/create-order
 // @access  Private
 const createRazorpayOrder = async (req, res) => {
   try {
+    const { shippingAddress, couponCode } = req.body;
     const cartItems = await CartItem.find({ user: req.user._id }).populate('meal');
     const validCartItems = cartItems.filter(item => item.meal !== null);
 
     if (validCartItems.length === 0) {
       if (cartItems.length > 0) await CartItem.deleteMany({ user: req.user._id });
       return res.status(400).json({ message: 'No valid order items found.' });
+    }
+
+    if (!shippingAddress || !shippingAddress.street || !shippingAddress.city) {
+      return res.status(400).json({ message: 'Valid shipping address is strictly required.' });
     }
 
     // 1. Stock Validation Check
@@ -38,39 +35,99 @@ const createRazorpayOrder = async (req, res) => {
       meal: item.meal._id
     }));
 
-    const totalAmount = orderItems.reduce((acc, item) => acc + item.price * item.quantity, 0) + 40; 
+    // Server-side Coupon & Mathematical Validation
+    let discountPercent = 0;
+    let referrerId = null;
 
-    // Create a Pending Order in DB first
+    if (couponCode) {
+      const couponUpper = couponCode.toUpperCase();
+      
+      if (couponUpper === 'HEALTHY20') {
+        discountPercent = 0.20;
+      } else if (couponUpper.startsWith('VITA-')) {
+        const suffix = couponUpper.split('-')[1];
+        const User = require('../models/User');
+        
+        const referrers = await User.aggregate([
+          { $addFields: { idStr: { $toString: "$_id" } } },
+          { $match: { idStr: { $regex: suffix + '$', $options: 'i' } } },
+          { $limit: 1 }
+        ]);
+
+        const referrer = referrers.length > 0 ? referrers[0] : null;
+        
+        if (referrer && referrer._id.toString() !== req.user._id.toString()) {
+          discountPercent = 0.20;
+          referrerId = referrer._id;
+        }
+      } else {
+        const Coupon = require('../models/Coupon');
+        const validCoupon = await Coupon.findOne({ code: couponUpper, isActive: true });
+        if (validCoupon) {
+          discountPercent = validCoupon.discountPercent / 100;
+        }
+      }
+    }
+
+    const subtotal = orderItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
+    const discountAmount = subtotal * discountPercent;
+    
+    // 2. Wallet Deduction Logic
+    const User = require('../models/User');
+    const user = await User.findById(req.user._id);
+    const walletUsed = Math.min(user.walletBalance || 0, (subtotal - discountAmount + 40));
+    
+    const totalAmount = subtotal - discountAmount + 40 - walletUsed; 
+
+    // Create a Confirmed Order in DB instantly for prototype
     const dbOrder = new Order({
       orderItems,
       user: req.user._id,
       totalAmount,
-      paymentStatus: 'Pending'
+      discountAmount,
+      walletAmountUsed: walletUsed,
+      shippingAddress,
+      paymentStatus: 'Success',
+      status: 'Confirmed'
     });
     
     await dbOrder.save();
 
-    // Create Razorpay order
-    const options = {
-      amount: Math.round(totalAmount * 100), // amount in the smallest currency unit (paise)
-      currency: "INR",
-      receipt: `receipt_order_${dbOrder._id}`
-    };
+    // Update Buyer's Wallet (Subtract what was used)
+    if (walletUsed > 0) {
+      user.walletBalance -= walletUsed;
+      await user.save();
+    }
 
-    const razorpayOrder = await razorpay.orders.create(options);
+    // Award Referrer Bounty (₹150)
+    if (referrerId) {
+      const referrerUser = await User.findById(referrerId);
+      if (referrerUser) {
+        referrerUser.walletBalance += 150;
+        await referrerUser.save();
+      }
+    }
 
-    dbOrder.receiptId = razorpayOrder.id;
-    await dbOrder.save();
+    // Decrease stock mapping
+    for (const item of dbOrder.orderItems) {
+      const dbMeal = await Meal.findById(item.meal);
+      if (dbMeal) {
+        dbMeal.stock -= item.quantity;
+        await dbMeal.save();
+      }
+    }
+
+    // Clear cart immediately
+    await CartItem.deleteMany({ user: req.user._id });
 
     res.status(200).json({
       success: true,
-      order: razorpayOrder,
-      dbOrderId: dbOrder._id
+      orderId: dbOrder._id
     });
 
   } catch (error) {
-    console.error('Razorpay Order Error:', error);
-    res.status(500).json({ message: error.message || 'Something went wrong while creating razorpay order' });
+    console.error('Order Creation Error:', error);
+    res.status(500).json({ message: error.message || 'Something went wrong while creating the order' });
   }
 };
 
